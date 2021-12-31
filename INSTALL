@@ -1,0 +1,15 @@
+apt install chromium-chromedriver libwebkit2gtk-4.0-37 gir1.2-webkit2-4.0 webkit2gtk-driver
+python -m pip install teslapy requests_oauthlib websocket-client ratelimit pywebview babel
+
+
+# Setup the databases and Tesla authentication.
+python3 setup.py
+
+# Add crontab for regular data collection (add path to data_collect.py
+echo "0 *     * * *   root    /usr/bin/python3 data_collect.py" >> /etc/crontab
+
+# Wait at least 3 days for data to collect.
+python3 train-model.py
+
+# Act on the model.
+echo "1 *     * * *   root    /usr/bin/python3 change_battery.py" >> /etc/crontab
