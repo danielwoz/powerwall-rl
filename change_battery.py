@@ -10,10 +10,12 @@ import logging
 import multiprocessing
 import os
 import sys
+import datetime
+import math
 
-from powerwallrl.gym.powerwall import HomePowerEnv
-from powerwallrl.gym.powerwall import MakePowerwallEnv
+from powerwallrl.gym.powerwall import MakePowerwallPredictEnv
 from powerwallrl.settings import PowerwallRLConfig
+from teslapy import Tesla
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -31,26 +33,31 @@ def main():
   logger.addHandler(handler)
 
   config = PowerwallRLConfig()
-  eval_env = FlattenObservation(HomePowerEnv(dayhour_offset=48))
-  eval_env = DummyVecEnv([lambda: eval_env])
 
   logger.debug("Loading model to determine action. %s",
               config.model_location)
+
+  tesla_api = Tesla(config.tesla_username, verify=True)
+  tesla_api.fetch_token()
+  battery = tesla_api.battery_list()[0]
+
+  current_percent_charged = math.floor(battery.get_battery_data()['percentage_charged'])
+  logger.info("Battery currently has %d%% perent charge.", current_percent_charged)
+
+  current_backup_reserve_percent = math.floor(battery.get_battery_data()['backup']['backup_reserve_percent'])
+  logger.info("Battery backup reserve percent is current set to %d%%", current_backup_reserve_percent)
+
   model = PPO.load(config.model_location)
+  env = MakePowerwallPredictEnv(config, battery_charge=current_percent_charged, start_datetime=datetime.datetime.now())
+  obs = env.reset()
+  action, _states = model.predict(obs, deterministic=True)
+  charge_percent = max(0, min(100, round(action[0] * 50 + 50)))
 
-  #    'uvi': Box(low=0, high=100, shape=(24,), dtype=np.float16),
-  #    'clouds': Box(low=0, high=100, shape=(24,), dtype=np.uint8),
-  #    'temp': Box(low=-100, high=100, shape=(24,), dtype=np.float16),
-  #    'sun_altitude': Box(low=-90, high=90, shape=(24,), dtype=np.float16),
-  #    'sun_azimuth': Box(low=0, high=360, shape=(24,), dtype=np.float16),
-  #    'grid_cost': Box(low=-1, high=1, shape=(24,), dtype=np.float16),
-  #    'hour_of_day': Box(low=0, high=23, shape=(24,), dtype=np.uint8),
-  #    'day_of_week': Box(low=0, high=6, shape=(24,), dtype=np.uint8),
-  #    'battery': Box(low=0, high=100, shape=(1,), dtype=np.uint8),
-
-
-  action, reward = model.step()
-
+  if charge_percent == current_backup_reserve_percent:
+    logger.info("Battery backup reserve percent already set correctly at %d%%", charge_percent)
+  else:
+    logger.info("Setting battery backup reserve percent to %d%%", charge_percent)
+    battery.set_backup_reserve_percent(charge_percent)
 
   logger.debug("Action taken.")
   del model

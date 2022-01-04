@@ -24,7 +24,8 @@ from pysolar.solar import get_altitude, get_azimuth
 
 
 class HomePowerEnv(Env):
-  def __init__(self, config, dayhour_offset=None, debug=True):
+  def __init__(self, config, dayhour_offset=None, debug=True, battery_charge=30,
+               randomize_battery_start=True):
     # The only action we can set is the target battery charge percentage.
     self.action_space = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
@@ -57,8 +58,10 @@ class HomePowerEnv(Env):
     self.max_battery_charge_rate_ratio = float(
       (3300 / self.battery_capacity) / 1.1)
 
-    # Set start battery charge.
-    self.battery_charge = 30
+    # Set start or randomize battery starting charge on restarts.
+    self.battery_charge = battery_charge
+    self.randomize_battery_start = randomize_battery_start
+
     self.offset = 0
     self.max_battery_left = 100
     self.seed()
@@ -276,11 +279,13 @@ class HomePowerEnv(Env):
     self.orig_battery_list = []
 
     # Start with a random amount of battery.
+    if self.randomize_battery_start:
+      self.battery_charge = self.np_random.randint(0, 100)
+
     if self.dayhour_offset:
       self.data_set = self.get_data(self.dayhour_offset)
       self.dayhour_offset += 24
     else:
-      self.battery_charge = self.np_random.randint(0, 100)
       self.data_set = self.get_data()
 
     self.offset = 0
@@ -375,5 +380,68 @@ class HomePowerEnv(Env):
     return final_data
 
 
+class HomePowerPredictEnv(HomePowerEnv):
+  def __init__(self,
+               config,
+               start_datetime=None,
+               battery_charge=30,
+               debug=True):
+    super().__init__(config, battery_charge=battery_charge, debug=debug, randomize_battery_start=False)
+
+    self.start_datetime = start_datetime
+
+  def fill_data(self, offset):
+    inverted_data_set = list(zip(*self.data_set[offset:offset + 24]))
+
+    return_data = {
+      'uvi': np.array(inverted_data_set[2], dtype=np.float16),
+      'clouds': np.array(inverted_data_set[3], dtype=np.uint8),
+      'temp': np.array(inverted_data_set[1], dtype=np.float16),
+      #'humidity': np.array(inverted_data_set[4], dtype=np.uint8),
+      'sun_altitude': np.array(inverted_data_set[8], dtype=np.float16),
+      'sun_azimuth': np.array(inverted_data_set[9], dtype=np.float16),
+      'grid_cost': np.array(inverted_data_set[7], dtype=np.float16),
+      'hour_of_day': np.array(inverted_data_set[6], dtype=np.uint16),
+      'day_of_week': np.array(inverted_data_set[5], dtype=np.uint16),
+      'battery': np.array([self.battery_charge], dtype=np.uint8),
+    }
+    return return_data
+
+  def get_data(self, dayhour_offset=None):
+    con = sqlite3.connect(self.config.database_location)
+    cur = con.cursor()
+    cur.execute(
+      ''' SELECT weather_last.dayhour AS dayhour,
+                 weather_last.temp AS temp,
+                 weather_last.uvi AS uvi,
+                 weather_last.clouds AS clouds,
+                 weather_last.humidity AS humidity
+          FROM weather_last
+          WHERE weather_last.dayhour > ?
+          ORDER BY weather_last.dayhour
+          LIMIT 48 ''', (str(self.start_datetime.strftime("%Y%m%d%H")),))
+    data = cur.fetchall()
+
+    final_data = []
+    for row in data:
+      row = list(row)
+      current_date = self.dayhour_to_datetime(row[0])
+      row.append(current_date.weekday())
+      row.append(current_date.hour)
+      row.append(float(self.grid_cost(current_date)))
+      row.append(
+        get_altitude(self.config.latitude, self.config.longitude,
+                     current_date + timedelta(minutes=30)))
+      row.append(
+        get_azimuth(self.config.latitude, self.config.longitude,
+                    current_date + timedelta(minutes=30)))
+      final_data.append(row)
+    return final_data
+
+
 def MakePowerwallEnv(config, **kwargs):
   return FlattenObservation(HomePowerEnv(config, **kwargs))
+
+
+def MakePowerwallPredictEnv(config, **kwargs):
+  return FlattenObservation(HomePowerPredictEnv(config, **kwargs))
