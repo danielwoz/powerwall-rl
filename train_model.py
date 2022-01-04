@@ -68,7 +68,7 @@ def main():
                                             n_eval_episodes=2,
                                             render=False,
                                             deterministic=True)
-  logger.info("Mean reward after training: %s" + str(mean_reward))
+  logger.info("Mean reward after training: %s", str(mean_reward))
   del model
 
 
