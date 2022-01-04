@@ -15,9 +15,9 @@ import sys
 import teslapy
 import time
 
-from data.weather import WeatherData
-from data.tesla import TeslaPowerwallData
-from settings import PowerwallRLConfig
+from powerwallrl.data.weather import WeatherData
+from powerwallrl.data.tesla import TeslaPowerwallData
+from powerwallrl.settings import PowerwallRLConfig
 
 def main():
   # Log INFO level message to stdout for the user to see progress.
