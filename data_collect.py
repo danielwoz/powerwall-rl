@@ -19,6 +19,7 @@ from powerwallrl.data.weather import WeatherData
 from powerwallrl.data.tesla import TeslaPowerwallData
 from powerwallrl.settings import PowerwallRLConfig
 
+
 def main():
   # Log INFO level message to stdout for the user to see progress.
   root = logging.getLogger()
@@ -40,8 +41,8 @@ def main():
   weather.save_weather_data()
 
   # Power Data.
-  powerwall = TeslaPowerwallData(config.tesla_username, config.local_timezone,
-                                 db)
+  powerwall = TeslaPowerwallData(config.tesla_username, db,
+                                 config.local_timezone)
   root.info("Collecting powerwall data.")
   powerwall.collect_data()
 

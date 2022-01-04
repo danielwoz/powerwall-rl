@@ -25,10 +25,7 @@ logger = logging.getLogger(__name__)
 
 class TeslaPowerwallData(object):
 
-  def __init__(self,
-               username,
-               local_timezone='Etc/UTC',
-               database=sqlite3.connect('powerwall.db')):
+  def __init__(self, username, database, local_timezone='Etc/UTC'):
     self.con = database
     self.username = username
     self.tz = dateutil.tz.gettz(local_timezone)
@@ -55,7 +52,8 @@ class TeslaPowerwallData(object):
   def backfill_data(self):
     """ Backfill our database with the power data since installation date. """
     self.collect_data(
-      datetime.fromisoformat(self.battery.get_battery_data()['installation_date']))
+      datetime.fromisoformat(
+        self.battery.get_battery_data()['installation_date']))
 
   def collect_data(self, start_date=None):
     """ Collects data from start_date (defaults to 7 days ago.) to now.
@@ -121,7 +119,8 @@ class TeslaPowerwallData(object):
       if 'time_series' not in battery_timeseries:
         continue
 
-      logger.info("Storing Tesla Powerwall power data for: %s", format_datetime(start_of_day))
+      logger.info("Storing Tesla Powerwall power data for: %s",
+                  format_datetime(start_of_day))
 
       for timestamp in battery_timeseries['time_series']:
         time_key = parse(timestamp['timestamp']).strftime("%Y%m%d%H")
