@@ -24,7 +24,7 @@ from pysolar.solar import get_altitude, get_azimuth
 
 
 class HomePowerEnv(Env):
-  def __init__(self, config, dayhour_offset=None, debug=True, battery_charge=30,
+  def __init__(self, config, powerplan, dayhour_offset=None, debug=True, battery_charge=30,
                randomize_battery_start=True):
     # The only action we can set is the target battery charge percentage.
     self.action_space = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
@@ -44,6 +44,7 @@ class HomePowerEnv(Env):
     }
     self.observation_space = Dict(spaces)
     self.config = config
+    self.plan = powerplan
 
     self.dayhour_offset = dayhour_offset
     self.debug = debug
@@ -70,7 +71,7 @@ class HomePowerEnv(Env):
     self.battery_state = []
     self.action_list = []
     self.reward_list = []
-    self.default_cost_list = []
+    self.default_reward_list = []
     self.datetime_list = []
     self.shortfall_list = []
     self.home_usage_list = []
@@ -93,13 +94,16 @@ class HomePowerEnv(Env):
     self.orig_battery_list.append(round(self.data_set[self.offset][2]))
     self.solar_list.append(round(self.data_set[self.offset][1]))
 
-    if short_fall_power > 0:
-      default_cost = short_fall_power * self.grid_cost(
-        self.dayhour_to_datetime(self.data_set[self.offset][0])) * -1.0
-    else:
-      default_cost = short_fall_power * 0.00001 * -1.0
+    # Step's current datetime.
+    dt = self.dayhour_to_datetime(self.data_set[self.offset][0])
 
-    self.default_cost_list.append(round(default_cost * 1000))
+    if short_fall_power > 0:
+      default_reward = short_fall_power * self.grid_usage(dt) * -1.0
+    else:
+      # This will be a negative cost, hence treated as a bass reward.
+      default_reward = short_fall_power * self.grid_feedback(dt) * -1.0
+
+    self.default_reward_list.append(round(default_reward))
 
     reward = float(0.0)
 
@@ -164,6 +168,7 @@ class HomePowerEnv(Env):
     # the battery isn't full. It would be much harder to model if it did. If
     # your feedback tariff was really really high during a solar period the
     # model would learn to fill your battery anyway...
+    # 1.1 represents the tax / ineffieciency of lithium batteries.
     if short_fall_power < 0 and self.battery_charge < 100:
       battery_wh_to_full = (
         (100 - self.battery_charge) / 100 * self.battery_capacity) * 1.1
@@ -189,29 +194,25 @@ class HomePowerEnv(Env):
 
     # Multiply our shortfall Wh by grid cost.
     if short_fall_power > 0:
-      reward = short_fall_power * self.grid_cost(
-        self.dayhour_to_datetime(self.data_set[self.offset][0])) * -1.0
+      reward -= short_fall_power * self.grid_usage(dt)
     # Multiply additional power by the grid feedback reward.
     elif short_fall_power < 0:
-      # TODO Make this a function for users to describe their feedback rate.
-      reward = short_fall_power * -1.0 * 0.00001
+      reward += short_fall_power * self.grid_feedback(dt) * -1.0
 
     if (self.offset == 23):
       # Give reward of the value of the battery charge for the next hour.
       reward += self.battery_capacity * (
-        self.battery_charge / 100) * self.grid_cost(
-          self.dayhour_to_datetime(self.data_set[self.offset][0]))
+        self.battery_charge / 100) * self.grid_usage(dt)
 
-    # Use the no battery cost as the basis for 0 reward.
-    reward -= default_cost
+    # Use the no battery scenario cost as the basis for 0 reward.
+    reward -= default_reward
 
     # Value backup (being above 65% charge) at 650$ a year. (half the value.)
     if self.battery_charge > 65:
       reward += (650.0 / (360.0 * 24.0))
 
-    self.reward_list.append(int(reward * 1000))
-    self.datetime_list.append(
-      self.dayhour_to_datetime(self.data_set[self.offset][0]).hour)
+    self.reward_list.append(int(reward))
+    self.datetime_list.append(dt.hour)
     self.shortfall_list.append(int(short_fall_power))
 
     if (self.offset == 23 and self.debug and random.random() < 0.001):
@@ -223,7 +224,7 @@ class HomePowerEnv(Env):
           ["Usage"] + self.home_usage_list,
           ["Solar"] + self.solar_list,
           ["Rewards"] + self.reward_list,
-          ["Default Cost"] + self.default_cost_list,
+          ["Default Cost"] + self.default_reward_list,
           ["Shortfall"] + self.shortfall_list,
           ["Battery WH"] + self.battery_usage,
           ["Mode"] + self.what_to_do,
@@ -231,14 +232,14 @@ class HomePowerEnv(Env):
         ],
                  headers=["Metric"] + self.datetime_list))
       print("Total Reward: " + str(sum(self.reward_list)))
-      print("Default Cost: " + str(sum(self.default_cost_list) * -1))
+      print("Default Cost: " + str(sum(self.default_reward_list) * -1))
     if (self.offset == 23):
       self.battery_state = []
       self.battery_charge_list = []
       self.battery_usage = []
       self.action_list = []
       self.reward_list = []
-      self.default_cost_list = []
+      self.default_reward_list = []
       self.datetime_list = []
       self.shortfall_list = []
       self.solar_list = []
@@ -271,7 +272,7 @@ class HomePowerEnv(Env):
     self.battery_usage = []
     self.action_list = []
     self.reward_list = []
-    self.default_cost_list = []
+    self.default_reward_list = []
     self.datetime_list = []
     self.shortfall_list = []
     self.solar_list = []
@@ -310,18 +311,13 @@ class HomePowerEnv(Env):
     }
     return return_data
 
-  def grid_cost(self, dt):
-    # Every day offpeak
-    if (dt.hour > 21 or dt.hour < 7):
-      return float(0.000153645)
-    # Weekend Shoulder
-    if (dt.weekday() == 5 or dt.weekday() == 6):
-      return float(0.000292100)
-    # Weekday Shoulder
-    if (dt.hour > 7 or dt.hour < 15):
-      return float(0.000292100)
-    # Weekday Peak
-    return float(0.000557734)
+  def grid_usage(self, dt):
+    """ Return grid cost per Wh. """
+    return self.plan.usage(dt) / 1000.0
+
+  def grid_feedback(self, dt):
+    """ Return grid reward per Wh for feedback. """
+    return self.plan.feedback(dt) / 1000.0
 
   def render(self):
     pass
@@ -369,7 +365,7 @@ class HomePowerEnv(Env):
       current_date = self.dayhour_to_datetime(row[0])
       row.append(current_date.weekday())
       row.append(current_date.hour)
-      row.append(float(self.grid_cost(current_date)))
+      row.append(float(self.grid_usage(current_date)))
       row.append(
         get_altitude(self.config.latitude, self.config.longitude,
                      current_date + timedelta(minutes=30)))
@@ -383,10 +379,12 @@ class HomePowerEnv(Env):
 class HomePowerPredictEnv(HomePowerEnv):
   def __init__(self,
                config,
+               powerplan,
                start_datetime=None,
                battery_charge=30,
                debug=True):
-    super().__init__(config, battery_charge=battery_charge, debug=debug, randomize_battery_start=False)
+    super().__init__(config, powerplan, battery_charge=battery_charge,
+                     debug=debug, randomize_battery_start=False)
 
     self.start_datetime = start_datetime
 
@@ -428,7 +426,7 @@ class HomePowerPredictEnv(HomePowerEnv):
       current_date = self.dayhour_to_datetime(row[0])
       row.append(current_date.weekday())
       row.append(current_date.hour)
-      row.append(float(self.grid_cost(current_date)))
+      row.append(float(self.grid_usage(current_date)))
       row.append(
         get_altitude(self.config.latitude, self.config.longitude,
                      current_date + timedelta(minutes=30)))
@@ -439,9 +437,9 @@ class HomePowerPredictEnv(HomePowerEnv):
     return final_data
 
 
-def MakePowerwallEnv(config, **kwargs):
-  return FlattenObservation(HomePowerEnv(config, **kwargs))
+def MakePowerwallEnv(config, powerplan, **kwargs):
+  return FlattenObservation(HomePowerEnv(config, powerplan, **kwargs))
 
 
-def MakePowerwallPredictEnv(config, **kwargs):
-  return FlattenObservation(HomePowerPredictEnv(config, **kwargs))
+def MakePowerwallPredictEnv(config, powerplan, **kwargs):
+  return FlattenObservation(HomePowerPredictEnv(config, powerplan, **kwargs))

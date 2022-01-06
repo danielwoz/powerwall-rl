@@ -10,6 +10,10 @@ import configparser
 import os
 from pathlib import Path
 
+import powerwallrl.powerplans
+import powerwallrl.powerplans.default
+import powerwallrl.powerplans.powerplan
+
 
 class PowerwallRLConfig(object):
 
@@ -55,3 +59,8 @@ class PowerwallRLConfig(object):
         Path(self.config['powerwall-rl']['model_location']).resolve())
     return os.path.join(Path.home(), "powerwall-model")
 
+  @property
+  def grid_plan(self):
+    if ('grid_plan' in self.config['powerwall-rl']):
+      return  powerwallrl.powerplans.registry[self.config['powerwall-rl']['grid_plan']]()
+    return powerwallrl.powerplans.default.Default()

@@ -23,7 +23,8 @@ from stable_baselines3.common.env_checker import check_env
 
 def _MakePowerwallEnv():
   config = PowerwallRLConfig()
-  return MakePowerwallEnv(config)
+  return MakePowerwallEnv(config, config.grid_plan)
+
 
 def main():
   # Log INFO level message to stdout for the user to see progress.
@@ -47,9 +48,9 @@ def main():
                 config.model_location)
     logger.info("rm %s.zip before training if you want to start afresh",
                 config.model_location)
-    model.set_parameters(config.model_location)
+    # model.set_parameters(config.model_location)
 
-  eval_env = MakePowerwallEnv(config, dayhour_offset=48)
+  eval_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=48)
   eval_env = DummyVecEnv([lambda: eval_env])
   mean_reward, std_reward = evaluate_policy(model,
                                             eval_env,
@@ -58,10 +59,10 @@ def main():
                                             deterministic=True)
   logger.info("Mean reward before training: %s", mean_reward)
 
-  model.learn(total_timesteps=500000)
+  model.learn(total_timesteps=25000000)
   model.save(config.model_location)
 
-  eval_env = MakePowerwallEnv(config, dayhour_offset=48)
+  eval_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=48)
   eval_env = DummyVecEnv([lambda: eval_env])
   mean_reward, std_reward = evaluate_policy(model,
                                             eval_env,
