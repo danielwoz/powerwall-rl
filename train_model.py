@@ -48,7 +48,7 @@ def main():
                 config.model_location)
     logger.info("rm %s.zip before training if you want to start afresh",
                 config.model_location)
-    # model.set_parameters(config.model_location)
+    model.set_parameters(config.model_location)
 
   eval_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=48)
   eval_env = DummyVecEnv([lambda: eval_env])
