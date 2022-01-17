@@ -1,6 +1,6 @@
 apt install chromium-chromedriver libwebkit2gtk-4.0-37 gir1.2-webkit2-4.0 webkit2gtk-driver
-python -m pip install teslapy requests_oauthlib websocket-client ratelimit pywebview babel
-
+pip3 install teslapy requests_oauthlib websocket-client ratelimit pywebview babel
+pip3 install --upgrade requests
 
 # Setup the databases and Tesla authentication.
 python3 setup.py

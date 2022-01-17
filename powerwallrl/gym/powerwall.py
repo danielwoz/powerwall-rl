@@ -8,7 +8,9 @@ save from your grid's usage power bill.
 
 __version__ = '0.0.1'
 
+import calendar
 import dateutil.tz
+import logging
 import numpy as np
 import random
 import sqlite3
@@ -387,6 +389,8 @@ class HomePowerPredictEnv(HomePowerEnv):
                      debug=debug, randomize_battery_start=False)
 
     self.start_datetime = start_datetime
+    # Log forecast data for easier debugging and transparency on decisions.
+    self.logger = logging.getLogger()
 
   def fill_data(self, offset):
     inverted_data_set = list(zip(*self.data_set[offset:offset + 24]))
@@ -403,6 +407,19 @@ class HomePowerPredictEnv(HomePowerEnv):
       'day_of_week': np.array(inverted_data_set[5], dtype=np.uint16),
       'battery': np.array([self.battery_charge], dtype=np.uint8),
     }
+
+    self.logger.info("Forecast: \n" +
+      tabulate([
+        ["Day"] + list(map(lambda i : calendar.day_name[i][0:3], inverted_data_set[5])),
+        ["Hour"] + list(inverted_data_set[6]),
+        ["UVI"] + list(inverted_data_set[2]),
+        ["Clouds %"] + list(inverted_data_set[3]),
+        ["Temp"] + list(inverted_data_set[1]),
+        ["Sun Altitude"] + list(map(lambda i : "%0.2f" % i, inverted_data_set[8])),
+        ["Sun Azimuth"] + list(map(lambda i : "%0.2f" % i, inverted_data_set[9])),
+        ["Grid Cost"] + list(map(lambda i : "%0.2f" % i, inverted_data_set[7])),
+        ["Battery %"] + [self.battery_charge]
+      ]))
     return return_data
 
   def get_data(self, dayhour_offset=None):
@@ -415,7 +432,7 @@ class HomePowerPredictEnv(HomePowerEnv):
                  weather_last.clouds AS clouds,
                  weather_last.humidity AS humidity
           FROM weather_last
-          WHERE weather_last.dayhour > ?
+          WHERE weather_last.dayhour >= ?
           ORDER BY weather_last.dayhour
           LIMIT 48 ''', (str(self.start_datetime.strftime("%Y%m%d%H")),))
     data = cur.fetchall()

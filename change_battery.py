@@ -6,6 +6,10 @@
 
 __version__ = '0.0.1'
 
+# To remove GDK errors so that this can run headless.
+import matplotlib
+matplotlib.use('Agg')
+
 import logging
 import sys
 import datetime
