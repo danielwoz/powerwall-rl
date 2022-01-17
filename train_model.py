@@ -54,7 +54,7 @@ def main():
   eval_env = DummyVecEnv([lambda: eval_env])
   mean_reward, std_reward = evaluate_policy(model,
                                             eval_env,
-                                            n_eval_episodes=2,
+                                            n_eval_episodes=100,
                                             render=False,
                                             deterministic=True)
   logger.info("Mean reward before training: %s", mean_reward)
@@ -66,7 +66,7 @@ def main():
   eval_env = DummyVecEnv([lambda: eval_env])
   mean_reward, std_reward = evaluate_policy(model,
                                             eval_env,
-                                            n_eval_episodes=2,
+                                            n_eval_episodes=100,
                                             render=False,
                                             deterministic=True)
   logger.info("Mean reward after training: %s", str(mean_reward))
