@@ -26,8 +26,10 @@ from pysolar.solar import get_altitude, get_azimuth
 
 
 class HomePowerEnv(Env):
-  def __init__(self, config, powerplan, dayhour_offset=None, debug=True, battery_charge=30,
-               randomize_battery_start=True):
+  def __init__(self, config, powerplan, dayhour_offset=None, debug=True,
+               debug_ratio=.001, battery_charge=30,
+               randomize_battery_start=True, reward_backup_percent=True,
+               reward_battery_left=True):
     # The only action we can set is the target battery charge percentage.
     self.action_space = Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
@@ -44,18 +46,22 @@ class HomePowerEnv(Env):
       'day_of_week': Box(low=0, high=6, shape=(24,), dtype=np.uint8),
       'battery': Box(low=0, high=100, shape=(1,), dtype=np.uint8),
     }
+    # Used to log updates and debugging information.
+    self.logger = logging.getLogger()
     self.observation_space = Dict(spaces)
     self.config = config
+    self.con = sqlite3.connect(self.config.database_location)
     self.plan = powerplan
 
     self.dayhour_offset = dayhour_offset
     self.debug = debug
+    self.debug_ratio = debug_ratio
 
     # Total Wh the telsa battery has.
-    # TODO: Get this from tesla API.
+    # TODO(): Get this from tesla API.
     self.battery_capacity = 13500
     # We can only charge or discharge 5KwH of the battery in one hour.
-    # TODO( Add multi-battery support.
+    # TODO(): Add multi-battery support.
     self.max_battery_discharge_rate_ratio = float(
       (5000 / self.battery_capacity) / 1.1)
     self.max_battery_charge_rate_ratio = float(
@@ -64,15 +70,18 @@ class HomePowerEnv(Env):
     # Set start or randomize battery starting charge on restarts.
     self.battery_charge = battery_charge
     self.randomize_battery_start = randomize_battery_start
+    self.reward_backup_percent = reward_backup_percent
+    self.reward_battery_left = reward_battery_left
 
     self.offset = 0
-    self.max_battery_left = 100
+    self.battery_charge_left = 100
     self.seed()
     self.battery_usage = []
     self.battery_charge_list = []
     self.battery_state = []
     self.action_list = []
     self.reward_list = []
+    self.after_cost_list = []
     self.default_reward_list = []
     self.datetime_list = []
     self.shortfall_list = []
@@ -86,6 +95,7 @@ class HomePowerEnv(Env):
     # home_usage = battery_usage + grid + solar
     home_usage = (self.data_set[self.offset][3] +
                   self.data_set[self.offset][2] + self.data_set[self.offset][1])
+    # We are short home_usage minus solar.
     short_fall_power = home_usage - self.data_set[self.offset][1]
     # Covert the -1 to 1 back to a battery percentage.
     action = max(0, min(100, round(action[0] * 50 + 50)))
@@ -201,24 +211,33 @@ class HomePowerEnv(Env):
     elif short_fall_power < 0:
       reward += short_fall_power * self.grid_feedback(dt) * -1.0
 
-    if (self.offset == 23):
-      # Give reward of the value of the battery charge for the next hour.
+    self.after_cost_list.append(int(reward))
+
+    if self.offset == 23 and self.reward_battery_left:
+      # Give reward or penalty the value of the battery charge for the next hour
+      # compared to initial charge.
+      # Maybe this should be the average of the next 3 hours? The max
+      # charge/discharge time, but this is probably good enough.
+      # All we are trying to do here is not reward the model for always driving
+      # initial battery charge to zero.
       reward += self.battery_capacity * (
-        self.battery_charge / 100) * self.grid_usage(dt)
+        (self.battery_charge - self.initial_battery_charge) / 100) * self.grid_usage(dt)
 
     # Use the no battery scenario cost as the basis for 0 reward.
     reward -= default_reward
 
-    # Value backup (being above 65% charge) at 650$ a year. (half the value.)
-    if self.battery_charge > 65:
-      reward += (650.0 / (360.0 * 24.0))
+    # Value our powerwall as a backup worth 150$ a year and that it's only
+    # valuable at that when it is at 65% or more charge.
+    # TODO() needs regionalization.
+    if self.battery_charge > 65 and self.reward_backup_percent:
+      reward += (15000.0 / (360.0 * 24.0))
 
     self.reward_list.append(int(reward))
     self.datetime_list.append(dt.hour)
     self.shortfall_list.append(int(short_fall_power))
 
-    if (self.offset == 23 and self.debug and random.random() < 0.001):
-      print(
+    if (self.offset == 23 and self.debug and random.random() < self.debug_ratio):
+      self.logger.info("\n" +
         tabulate([
           ["Battery Percent"] + self.battery_state,
           ["Target Percent"] + self.action_list,
@@ -226,21 +245,24 @@ class HomePowerEnv(Env):
           ["Usage"] + self.home_usage_list,
           ["Solar"] + self.solar_list,
           ["Rewards"] + self.reward_list,
-          ["Default Cost"] + self.default_reward_list,
+          ["After Cost"] + self.after_cost_list,
+          ["Before Cost"] + self.default_reward_list,
           ["Shortfall"] + self.shortfall_list,
           ["Battery WH"] + self.battery_usage,
           ["Mode"] + self.what_to_do,
           ["Orig Battery"] + self.orig_battery_list,
         ],
-                 headers=["Metric"] + self.datetime_list))
-      print("Total Reward: " + str(sum(self.reward_list)))
-      print("Default Cost: " + str(sum(self.default_reward_list) * -1))
+                 headers=["Metric"] + self.datetime_list) +
+        "\nTotal Reward: " + str(sum(self.reward_list)) +
+        "\nAfter Cost: " + str(sum(self.after_cost_list) * -1) +
+        "\nDefault Cost: " + str(sum(self.default_reward_list) * -1))
     if (self.offset == 23):
       self.battery_state = []
       self.battery_charge_list = []
       self.battery_usage = []
       self.action_list = []
       self.reward_list = []
+      self.after_cost_list = []
       self.default_reward_list = []
       self.datetime_list = []
       self.shortfall_list = []
@@ -284,6 +306,7 @@ class HomePowerEnv(Env):
     # Start with a random amount of battery.
     if self.randomize_battery_start:
       self.battery_charge = self.np_random.randint(0, 100)
+    self.initial_battery_charge = self.battery_charge
 
     if self.dayhour_offset:
       self.data_set = self.get_data(self.dayhour_offset)
@@ -294,7 +317,6 @@ class HomePowerEnv(Env):
     self.offset = 0
     self.battery_charge_left = 100
 
-    #self.battery = random.randomint(0, 100)
     return self.fill_data(0)
 
   def fill_data(self, offset):
@@ -324,16 +346,26 @@ class HomePowerEnv(Env):
   def render(self):
     pass
 
-  def get_data(self, dayhour_offset=None):
-    con = sqlite3.connect(self.config.database_location)
-    cur = con.cursor()
+  def data_set_size(self):
+    if hasattr(self, 'data_set_size_count'):
+      return self.data_set_size
+
+    cur = self.con.cursor()
     cur.execute(''' SELECT count(*)
                     FROM powerwall INNER JOIN weather_24
                     ON powerwall.dayhour = weather_24.dayhour ''')
     row_count = cur.fetchall()
-    if not dayhour_offset:
-      dayhour_offset = self.np_random.randint(0, row_count[0][0] - 48)
+    
+    # We can only start a episode if we have 48 hours of data into the future,
+    # the 24th hour of an episode needs 24 hours of weather forecast
+    # observations into the future.
+    return row_count[0][0] - 48
 
+  def earliest_datetime(self):
+    if hasattr(self, 'earliest_datettime_dt'):
+      return self.earliest_datettime_dt
+
+    cur = self.con.cursor()
     cur.execute(''' SELECT powerwall.dayhour
                     FROM powerwall INNER JOIN weather_24
                     ON powerwall.dayhour = weather_24.dayhour
@@ -341,9 +373,16 @@ class HomePowerEnv(Env):
                     LIMIT 1 ''')
 
     row_count = cur.fetchall()
-    earliest_datetime = self.dayhour_to_datetime(row_count[0][0])
-    start_datetime = earliest_datetime + timedelta(hours=dayhour_offset)
+    return self.dayhour_to_datetime(row_count[0][0])
 
+  def get_data(self, dayhour_offset=None):
+    if not dayhour_offset:
+      dayhour_offset = self.np_random.randint(0, self.data_set_size())
+
+    earliest_datetime = self.earliest_datetime()
+    start_datetime = self.earliest_datetime() + timedelta(hours=dayhour_offset)
+
+    cur = self.con.cursor()
     cur.execute(
       ''' SELECT powerwall.dayhour AS dayhour,
                                powerwall.solar_power AS solar_power,
@@ -389,8 +428,6 @@ class HomePowerPredictEnv(HomePowerEnv):
                      debug=debug, randomize_battery_start=False)
 
     self.start_datetime = start_datetime
-    # Log forecast data for easier debugging and transparency on decisions.
-    self.logger = logging.getLogger()
 
   def fill_data(self, offset):
     inverted_data_set = list(zip(*self.data_set[offset:offset + 24]))
@@ -423,8 +460,7 @@ class HomePowerPredictEnv(HomePowerEnv):
     return return_data
 
   def get_data(self, dayhour_offset=None):
-    con = sqlite3.connect(self.config.database_location)
-    cur = con.cursor()
+    cur = self.con.cursor()
     cur.execute(
       ''' SELECT weather_last.dayhour AS dayhour,
                  weather_last.temp AS temp,

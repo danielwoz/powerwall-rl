@@ -27,7 +27,7 @@ from stable_baselines3.common.env_checker import check_env
 
 def _MakePowerwallEnv():
   config = PowerwallRLConfig()
-  return MakePowerwallEnv(config, config.grid_plan)
+  return MakePowerwallEnv(config, config.grid_plan, debug=False)
 
 
 def main():
@@ -45,8 +45,10 @@ def main():
   num_cpu = multiprocessing.cpu_count()
   env = SubprocVecEnv([_MakePowerwallEnv for i in range(num_cpu)])
 
-  model = PPO('MlpPolicy', env, verbose=1, device='cpu')
+  model = PPO('MlpPolicy', env)
 
+  # TODO(): When the amount of data has doubled we should delete the model and
+  # do a safe generate and move / replace.
   if (os.path.exists(config.model_location + ".zip")):
     logger.info("Loading previous model to resume learning. %s",
                 config.model_location)
@@ -54,26 +56,47 @@ def main():
                 config.model_location)
     model.set_parameters(config.model_location)
 
-  eval_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=48)
+  eval_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=24,
+                              randomize_battery_start=False,
+                              reward_backup_percent=False,
+                              reward_battery_left=False)
   eval_env = DummyVecEnv([lambda: eval_env])
+
+  # Use the entire history as a way to no the real average cost saving.
+  max_episodes = int(eval_env.data_set_size() / 24) - 1
+  logger.info("Training from data set size / episodes / days: %d ", max_episodes)
+
   mean_reward, std_reward = evaluate_policy(model,
                                             eval_env,
-                                            n_eval_episodes=100,
+                                            n_eval_episodes=max_episodes,
+                                            warn=False,
                                             render=False,
                                             deterministic=True)
-  logger.info("Mean reward before training: %s", mean_reward)
+  logger.info("Mean reward before training start: %s", mean_reward)
 
-  model.learn(total_timesteps=25000000)
-  model.save(config.model_location)
+  i = 0
+  while i < 10:
+    i += 1
+    model.learn(total_timesteps=100000)
 
-  eval_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=48)
-  eval_env = DummyVecEnv([lambda: eval_env])
-  mean_reward, std_reward = evaluate_policy(model,
-                                            eval_env,
-                                            n_eval_episodes=100,
-                                            render=False,
-                                            deterministic=True)
-  logger.info("Mean reward after training: %s", str(mean_reward))
+    update_env = MakePowerwallEnv(config, config.grid_plan, dayhour_offset=24,
+                                  randomize_battery_start=False,
+                                  reward_backup_percent=False,
+                                  reward_battery_left=False)
+    update_env = DummyVecEnv([lambda: update_env])
+    mean_reward, std_reward = evaluate_policy(model,
+                                              update_env,
+                                              n_eval_episodes=max_episodes,
+                                              warn=False,
+                                              render=False,
+                                              deterministic=True)
+    model.save(config.model_location)
+    if i == 10:
+      logger.info("Final mean reward: %s", mean_reward)
+    else:
+      logger.info("Current mean reward: %s", mean_reward)
+
+
   del model
 
 

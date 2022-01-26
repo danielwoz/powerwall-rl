@@ -58,7 +58,9 @@ def main():
                                 start_datetime=datetime.datetime.now())
   obs = env.reset()
   action, _states = model.predict(obs, deterministic=True)
-  charge_percent = max(0, min(100, round(action[0] * 52 + 51)))
+  # Because the prediction is a float, we push out the bounds to get a true 0 and
+  # 100 setting that are very slightly favoured.
+  charge_percent = max(0, min(100, round(action[0] * 51 + 50.5)))
 
   if charge_percent == current_backup_reserve_percent:
     logger.info("Battery backup reserve percent already set correctly at %d%%",
