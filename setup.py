@@ -67,8 +67,8 @@ def main():
           'locally: '))
 
   # Power Data.
-  powerwall = TeslaPowerwallData(config.tesla_username, config.local_timezone,
-                                 db)
+  powerwall = TeslaPowerwallData(config.tesla_username, db,
+                                 config.local_timezone)
   root.info("Setting up powerwall data database tables.")
   powerwall.setup()
   root.info("Backfilling powerwall data. (Depending on how long installation "
