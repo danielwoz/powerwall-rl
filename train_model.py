@@ -60,10 +60,12 @@ def main():
                               randomize_battery_start=False,
                               reward_backup_percent=False,
                               reward_battery_left=False)
-  eval_env = DummyVecEnv([lambda: eval_env])
 
   # Use the entire history as a way to no the real average cost saving.
   max_episodes = int(eval_env.data_set_size() / 24) - 1
+
+  eval_env = DummyVecEnv([lambda: eval_env])
+
   logger.info("Training from data set size / episodes / days: %d ", max_episodes)
 
   mean_reward, std_reward = evaluate_policy(model,
