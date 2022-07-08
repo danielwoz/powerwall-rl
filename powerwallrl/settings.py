@@ -19,7 +19,8 @@ class PowerwallRLConfig(object):
 
   def __init__(self):
     self.config = configparser.ConfigParser()
-    self.config.read(os.path.join(Path.home(), 'powerwall-rl.ini'))
+    self.dir = os.path.join(Path.home(), '.powerwallrl')
+    self.config.read(os.path.join(self.dir, 'powerwall-rl.ini'))
 
   @property
   def latitude(self):
@@ -32,6 +33,13 @@ class PowerwallRLConfig(object):
   @property
   def openweathermap_api_key(self):
     return self.config['powerwall-rl']['openweathermap_api_key']
+
+  @property
+  def tesla_cache_file(self):
+    if ('tesla_cache_file' in self.config['powerwall-rl']):
+      return str(
+        Path(self.config['powerwall-rl']['tesla_cache_file']).resolve())
+    return os.path.join(self.dir, 'tesla_cache.json')
 
   @property
   def tesla_username(self):
@@ -50,17 +58,17 @@ class PowerwallRLConfig(object):
     if ('database_location' in self.config['powerwall-rl']):
       return str(
         Path(self.config['powerwall-rl']['database_location']).resolve())
-    return os.path.join(Path.home(), "powerwall-rl.db")
+    return os.path.join(self.dir, 'powerwall-rl.db')
 
   @property
   def model_location(self):
     if ('database_location' in self.config['powerwall-rl']):
       return str(
         Path(self.config['powerwall-rl']['model_location']).resolve())
-    return os.path.join(Path.home(), "powerwall-model")
+    return os.path.join(self.dir, 'powerwall-model')
 
   @property
   def grid_plan(self):
     if ('grid_plan' in self.config['powerwall-rl']):
-      return  powerwallrl.powerplans.registry[self.config['powerwall-rl']['grid_plan']]()
+      return powerwallrl.powerplans.registry[self.config['powerwall-rl']['grid_plan']]()
     return powerwallrl.powerplans.default.Default()

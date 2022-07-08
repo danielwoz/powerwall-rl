@@ -25,11 +25,11 @@ logger = logging.getLogger(__name__)
 
 class TeslaPowerwallData(object):
 
-  def __init__(self, username, database, local_timezone='Etc/UTC'):
+  def __init__(self, username, database, local_timezone='Etc/UTC', cache_file=None):
     self.con = database
     self.username = username
     self.tz = dateutil.tz.gettz(local_timezone)
-    self.tesla_api = Tesla(username, verify=True)
+    self.tesla_api = Tesla(username, verify=True, cache_file=cache_file)
     # TODO(): Add some error handling here.
     # self.tesla.authorized
     self.tesla_api.fetch_token()

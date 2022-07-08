@@ -7,6 +7,7 @@ __version__ = '0.0.1'
 
 import os
 import sys
+import platform
 from pathlib import Path
 
 MODULE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -24,7 +25,12 @@ for root, dirs, files in os.walk(MODULE_DIR):
       continue
     if len(root) < 1:
       continue
-    root = root.replace('/','.')
+
+    if (platform.system().startswith('Win')):
+      root = root.replace('\\','.')
+    else:
+      root = root.replace('/','.')
+
     for file in files:
       if '__init__.py' in file:
         continue

@@ -37,7 +37,7 @@ def main():
 
   logger.debug("Loading model to determine action. %s", config.model_location)
 
-  tesla_api = Tesla(config.tesla_username, verify=True)
+  tesla_api = Tesla(config.tesla_username, verify=True, cache_file=config.tesla_cache_file)
   tesla_api.fetch_token()
   battery = tesla_api.battery_list()[0]
 

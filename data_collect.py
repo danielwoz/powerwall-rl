@@ -12,7 +12,6 @@ __version__ = '0.0.1'
 import sqlite3
 import logging
 import sys
-import teslapy
 import time
 
 from powerwallrl.data.weather import WeatherData
@@ -42,7 +41,8 @@ def main():
 
   # Power Data.
   powerwall = TeslaPowerwallData(config.tesla_username, db,
-                                 config.local_timezone)
+                                 config.local_timezone,
+                                 config.tesla_cache_file)
   root.info("Collecting powerwall data.")
   powerwall.collect_data()
 

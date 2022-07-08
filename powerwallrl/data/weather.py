@@ -85,7 +85,7 @@ class WeatherData(object):
       collection_time = datetime.now(tz=self.tz)
 
     logger.info("Collecting weather data as of: %s",
-                format_datetime(collection_time, locale=locale.getlocale()[0]))
+                format_datetime(collection_time))
 
     for hour_dict in weather_data['hourly']:
       h = datetime.fromtimestamp(hour_dict['dt'], self.tz).strftime('%Y%m%d%H')
