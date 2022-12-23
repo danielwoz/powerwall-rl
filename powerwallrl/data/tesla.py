@@ -51,9 +51,11 @@ class TeslaPowerwallData(object):
 
   def backfill_data(self):
     """ Backfill our database with the power data since installation date. """
-    self.collect_data(
-      datetime.fromisoformat(
-        self.battery.get_battery_data()['installation_date']))
+    start_date = datetime.fromisoformat(
+            self.battery.get_battery_data()['installation_date'])
+    start_date = datetime(start_date.year, start_date.month, start_date.day,
+            tzinfo=self.tz)
+    self.collect_data(start_date)
 
   def collect_data(self, start_date=None):
     """ Collects data from start_date (defaults to 7 days ago.) to now.
@@ -107,12 +109,13 @@ class TeslaPowerwallData(object):
                             59,
                             59,
                             tzinfo=self.tz)
-
+      print("start of day: " + start_of_day.astimezone().strftime("%Y-%m-%dT%H:%M:%S+08:00"))
+      print("end of day: " + end_of_day.astimezone().strftime("%Y-%m-%dT%H:%M:%S+08:00"))
       battery_timeseries = self.battery.get_calendar_history_data(
         kind="power",
         period="day",
-        start_date=start_of_day.isoformat(),
-        end_date=end_of_day.isoformat(),
+        start_date=start_of_day.astimezone().strftime("%Y-%m-%dT%H:%M:%S-07:00"),
+        end_date=end_of_day.astimezone().strftime("%Y-%m-%dT%H:%M:%S-07:00"),
         timezone=self.tz)
 
       # No telsa time series data for this day.

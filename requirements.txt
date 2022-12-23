@@ -1,0 +1,15 @@
+teslapy
+requests_oauthlib
+websocket-client
+ratelimit
+pywebview
+babel
+python-dateutil
+matplotlib
+tabulate
+pysolar
+stable-baselines3
+requests
+torch
+torchvision
+torchaudio
