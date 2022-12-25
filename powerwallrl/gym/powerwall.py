@@ -50,6 +50,9 @@ class HomePowerEnv(Env):
     self.logger = logging.getLogger()
     self.observation_space = Dict(spaces)
     self.config = config
+    self.tz = dateutil.tz.gettz(self.config.local_timezone)
+    if (not self.tz):
+        raise Exception("No valid timezone found in configuration.")
     self.con = sqlite3.connect(self.config.database_location)
     self.plan = powerplan
 
@@ -284,7 +287,7 @@ class HomePowerEnv(Env):
                     int(dayhour[8:10]),
                     0,
                     0,
-                    tzinfo=dateutil.tz.gettz(self.config.local_timezone))
+                    tzinfo=self.tz)
 
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
@@ -404,15 +407,16 @@ class HomePowerEnv(Env):
     for row in data:
       row = list(row)
       current_date = self.dayhour_to_datetime(row[0])
+      mid_hour_time = current_date + timedelta(minutes=30)
       row.append(current_date.weekday())
       row.append(current_date.hour)
       row.append(float(self.grid_usage(current_date)))
       row.append(
         get_altitude(self.config.latitude, self.config.longitude,
-                     current_date + timedelta(minutes=30)))
+                     mid_hour_time))
       row.append(
         get_azimuth(self.config.latitude, self.config.longitude,
-                    current_date + timedelta(minutes=30)))
+                    mid_hour_time))
       final_data.append(row)
     return final_data
 

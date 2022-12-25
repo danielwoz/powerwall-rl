@@ -8,7 +8,7 @@ python-dateutil
 matplotlib
 tabulate
 pysolar
-stable-baselines3
+stable-baselines3[extra]>stable-baselines3-1.6
 requests
 torch
 torchvision
