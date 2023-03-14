@@ -13,6 +13,9 @@ pip install nvidia-cuda-runtime-cu11 --extra-index-url https://pypi.ngc.nvidia.c
 # HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem you have to set LongPathsEnabled to 1 
 pip install --upgrade torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
 
+git clone https://github.com/danielwoz/powerwall-rl
+cd powerwall-rl
+
 # Setup the databases and Tesla authentication.
 python setup.py
 
