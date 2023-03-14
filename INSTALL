@@ -1,5 +1,5 @@
 # Linux
-apt install chromium-chromedriver libwebkit2gtk-4.0-37 gir1.2-webkit2-4.0 webkit2gtk-driver
+apt install python3-pip chromium-chromedriver libwebkit2gtk-4.0-37 gir1.2-webkit2-4.0 webkit2gtk-driver
 
 pip install teslapy requests_oauthlib websocket-client ratelimit pywebview babel python-dateutil matplotlib tabulate pysolar webview
 pip install stable-baselines3
