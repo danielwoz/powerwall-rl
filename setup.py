@@ -56,10 +56,10 @@ def main():
   root.info("Collecting weather data.")
   weather.save_weather_data()
 
-  tesla = teslapy.Tesla(config.tesla_username)
+  tesla = teslapy.Tesla(email=config.tesla_username, cache_file=config.tesla_cache_file)
   if not tesla.authorized:
     # Setup Tesla API authentication
-    with teslapy.Tesla(config.tesla_username) as tesla:
+    with teslapy.Tesla(email=config.tesla_username, cache_file=config.tesla_cache_file) as tesla:
       print('Use browser to login. Page Not Found will be shown at success.')
       print('Open this URL: ' + tesla.authorization_url())
       tesla.fetch_token(authorization_response=input(

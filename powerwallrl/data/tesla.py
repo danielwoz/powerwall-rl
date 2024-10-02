@@ -52,7 +52,7 @@ class TeslaPowerwallData(object):
   def backfill_data(self):
     """ Backfill our database with the power data since installation date. """
     start_date = datetime.fromisoformat(
-            self.battery.get_battery_data()['installation_date'])
+            self.battery.get_site_info()['installation_date'])
     start_date = datetime(start_date.year, start_date.month, start_date.day,
             tzinfo=self.tz)
     self.collect_data(start_date)

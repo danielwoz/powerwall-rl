@@ -42,12 +42,12 @@ def main():
   battery = tesla_api.battery_list()[0]
 
   current_percent_charged = math.floor(
-    battery.get_battery_data()['percentage_charged'])
+    battery.get_site_data()['percentage_charged'])
   logger.info("Battery currently has %d%% perent charge.",
               current_percent_charged)
 
   current_backup_reserve_percent = math.floor(
-    battery.get_battery_data()['backup']['backup_reserve_percent'])
+    battery.get_site_info()['backup_reserve_percent'])
   logger.info("Battery backup reserve percent is current set to %d%%",
               current_backup_reserve_percent)
 
