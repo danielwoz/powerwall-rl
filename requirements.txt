@@ -1,8 +1,8 @@
-shimmy==1.3.0
-gym==0.21
-gymnasium==0.29.1
-stable-baselines3[extra]==2.3.2
 opencv-python==3.4.18.65
+shimmy==1.3.0
+gymnasium==0.29.1
+gym==0.26.2
+stable-baselines3[extra]==2.3.2
 teslapy==2.9.0
 requests_oauthlib
 websocket-client
@@ -17,4 +17,4 @@ requests
 torch
 torchvision
 torchaudio
-webview
+webview==0.1.5
